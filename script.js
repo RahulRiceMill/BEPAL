@@ -305,3 +305,4 @@ document.querySelectorAll(".tile").forEach(function (t) { t.addEventListener("cl
 document.querySelectorAll(".back").forEach(function (b) { b.addEventListener("click", function () { go("dashboard"); }); });
 
 show();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
