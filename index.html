@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BEPAL - Business Nepal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="logo">BEPAL</div>
+    <div class="slogan">One platform. Every business. Built for Nepal.</div>
+  </header>
+  <main class="wrap">
+
+    <section id="viewLoading" hidden><p class="sub">Loading...</p></section>
+
+    <section id="viewLogin" hidden>
+      <h2>Sign in</h2>
+      <form id="loginForm">
+        <label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email" required>
+        <label for="aPass">Password (at least 6 characters)</label><input id="aPass" type="password" autocomplete="current-password" required>
+        <p class="msg" id="aMsg"></p>
+        <button class="btn" type="submit">Sign in</button>
+        <button class="btn alt" type="button" id="signupBtn">Create new account</button>
+        <button class="link" type="button" id="forgotBtn">Forgot password?</button>
+      </form>
+    </section>
+
+    <section id="viewPin" hidden>
+      <h2 id="pinTitle">Enter PIN</h2>
+      <form id="pinForm">
+        <input id="pinInput" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="4 digits" required>
+        <p class="msg" id="pinMsg"></p>
+        <button class="btn" type="submit" id="pinOk">Unlock</button>
+        <button class="btn alt" type="button" id="pinSkip" hidden>Skip</button>
+        <button class="link" type="button" id="pinPass">Use password instead</button>
+      </form>
+    </section>
+
+    <section id="viewRegister" hidden>
+      <h2>Set up your business</h2>
+      <form id="registerForm">
+        <label for="bName">Business name</label><input id="bName" required>
+        <label for="bOwner">Owner name</label><input id="bOwner" required>
+        <label for="bPhone">Phone number</label><input id="bPhone" type="tel" inputmode="numeric" required>
+        <label for="bCategory">Business category</label>
+        <select id="bCategory">
+          <option value="grocery">Grocery store</option>
+          <option value="retail">Retail shop</option>
+          <option value="wholesale">Wholesaler</option>
+          <option value="other">Other</option>
+        </select>
+        <label for="bCurrency">Currency symbol</label><input id="bCurrency" value="Rs" maxlength="6">
+        <button class="btn" type="submit">Save business</button>
+      </form>
+    </section>
+
+    <section id="viewDashboard" hidden>
+      <h2 id="dName"></h2>
+      <p class="sub" id="dInfo"></p>
+      <div class="tiles">
+        <button class="tile" type="button" data-go="products">Products</button>
+        <button class="tile" type="button" data-go="pos">POS / Billing</button>
+        <button class="tile" type="button" data-go="inventory">Inventory</button>
+        <button class="tile" type="button" data-go="reports">Reports</button>
+      </div>
+      <p class="msg" id="dAlert"></p>
+      <div class="acts">
+        <button class="eb" type="button" id="lockBtn">Lock</button>
+        <button class="eb" type="button" id="pinBtn">Change PIN</button>
+        <button class="eb" type="button" id="outBtn">Sign out</button>
+      </div>
+    </section>
+
+    <section id="viewProducts" hidden>
+      <button class="back" type="button">&larr; Dashboard</button>
+      <h2>Products</h2>
+      <input id="search" type="search" placeholder="Search products">
+      <div class="list" id="list"></div>
+      <button class="btn" type="button" id="addBtn">+ Add product</button>
+      <form id="productForm" hidden>
+        <h3 id="pFormTitle">Add product</h3>
+        <label for="pName">Product name</label><input id="pName" required>
+        <label for="pPrice">Selling price</label><input id="pPrice" type="number" min="0" step="any" inputmode="decimal" required>
+        <label for="pCost">Cost price (what you paid)</label><input id="pCost" type="number" min="0" step="any" inputmode="decimal">
+        <label for="pStock">Stock in hand</label><input id="pStock" type="number" min="0" step="any" inputmode="decimal">
+        <label for="pLow">Warn me when stock is at or below</label><input id="pLow" type="number" min="0" step="any" inputmode="decimal">
+        <label for="pUnit">Unit (kg, piece, packet...)</label><input id="pUnit">
+        <label for="pCat">Category</label><input id="pCat" list="catList"><datalist id="catList"></datalist>
+        <button class="btn" type="submit">Save product</button>
+        <button class="btn alt" type="button" id="pCancel">Cancel</button>
+        <button class="link" type="button" id="pDelete" hidden>Delete product</button>
+      </form>
+    </section>
+
+    <section id="viewInventory" hidden>
+      <button class="back" type="button">&larr; Dashboard</button>
+      <h2>Inventory</h2>
+      <p class="sub">Low and empty items are shown first. Tap + Stock after buying more.</p>
+      <div class="list" id="invList"></div>
+    </section>
+
+    <section id="viewPos" hidden>
+      <button class="back" type="button">&larr; Dashboard</button>
+      <h2>POS / Billing</h2>
+      <input id="posSearch" type="search" placeholder="Search product to add">
+      <div class="list" id="posList"></div>
+      <h3>Cart</h3>
+      <div class="list" id="cart"></div>
+      <div class="total" id="cartTotal"></div>
+      <button class="btn" type="button" id="sellBtn">Complete sale</button>
+      <div id="receiptBox" hidden>
+        <h3>Receipt</h3>
+        <pre id="receipt"></pre>
+        <button class="btn alt" type="button" id="shareBtn">Share receipt</button>
+        <button class="btn alt" type="button" id="printBtn">Print</button>
+      </div>
+    </section>
+
+    <section id="viewReports" hidden>
+      <button class="back" type="button">&larr; Dashboard</button>
+      <h2>Reports and profit</h2>
+      <select id="repPeriod">
+        <option value="today">Today</option>
+        <option value="week">Last 7 days</option>
+        <option value="all">All time</option>
+      </select>
+      <div id="repBody"></div>
+    </section>
+
+  </main>
+  <script type="module" src="script.js"></script>
+</body>
+</html>
