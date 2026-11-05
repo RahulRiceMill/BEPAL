@@ -65,13 +65,10 @@
         <button class="tile" type="button" data-go="pos">POS / Billing</button>
         <button class="tile" type="button" data-go="inventory">Inventory</button>
         <button class="tile" type="button" data-go="reports">Reports</button>
+                <button class="tile" type="button" data-go="settings">Settings</button>
       </div>
       <p class="msg" id="dAlert"></p>
-      <div class="acts">
-        <button class="eb" type="button" id="lockBtn">Lock</button>
-        <button class="eb" type="button" id="pinBtn">Change PIN</button>
-        <button class="eb" type="button" id="outBtn">Sign out</button>
-      </div>
+              
     </section>
 
     <section id="viewProducts" hidden>
@@ -130,6 +127,53 @@
       <div id="repBody"></div>
     </section>
 
+      <section id="viewSettings" hidden>
+      <button class="back" type="button">&larr; Dashboard</button>
+      <h2>Settings</h2>
+      <p class="msg" id="setMsg"></p>
+
+      <h3>Business</h3>
+      <form id="bizForm">
+        <label for="sName">Business name</label><input id="sName" required>
+        <label for="sOwner">Owner name</label><input id="sOwner" required>
+        <label for="sPhone">Phone number</label><input id="sPhone" type="tel" required>
+        <label for="sCat">Category</label>
+        <select id="sCat"><option value="grocery">Grocery store</option><option value="retail">Retail shop</option><option value="wholesale">Wholesaler</option><option value="other">Other</option></select>
+        <label for="sCur">Currency symbol</label><input id="sCur" maxlength="6">
+        <button class="btn" type="submit">Save business details</button>
+      </form>
+
+      <h3>Account</h3>
+      <p class="sub">Signed in as <strong id="setEmail"></strong></p>
+      <form id="mailForm">
+        <label for="newMail">New email</label><input id="newMail" type="email" required>
+        <label for="mailPass">Current password</label><input id="mailPass" type="password" autocomplete="current-password" required>
+        <button class="btn alt" type="submit">Change email</button>
+      </form>
+      <form id="passForm">
+        <label for="curPass">Current password</label><input id="curPass" type="password" autocomplete="current-password" required>
+        <label for="newPass">New password (6+ characters)</label><input id="newPass" type="password" autocomplete="new-password" minlength="6" required>
+        <button class="btn alt" type="submit">Change password</button>
+      </form>
+
+      <h3>Security</h3>
+      <div class="acts">
+        <button class="eb" type="button" id="lockBtn">Lock now</button>
+        <button class="eb" type="button" id="pinBtn">Change PIN</button>
+        <button class="eb" type="button" id="outBtn">Sign out</button>
+      </div>
+
+      <h3>Your data</h3>
+      <button class="btn alt" type="button" id="exportBtn">Download sales (spreadsheet)</button>
+      <button class="btn alt danger" type="button" id="delHistBtn">Delete sales history</button>
+
+      <h3>Delete account</h3>
+      <p class="sub">Erases your account, products and sales. This cannot be undone.</p>
+      <label for="dangerPass">Current password</label><input id="dangerPass" type="password" autocomplete="current-password">
+      <button class="btn alt danger" type="button" id="delAcctBtn">Delete account and all data</button>
+
+      <p class="sub">BEPAL 1.0 | One platform. Every business. Built for Nepal.</p>
+    </section>
   </main>
   <script type="module" src="script.js"></script>
 </body>
