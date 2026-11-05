@@ -1,7 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail }
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail,
+  reauthenticateWithCredential, EmailAuthProvider, updatePassword, verifyBeforeUpdateEmail, deleteUser }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, doc, collection, setDoc, onSnapshot }
+import { initializeFirestore, persistentLocalCache, doc, collection, setDoc, onSnapshot, getDocs, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -14,11 +15,11 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = initializeFirestore(app, { localCache: persistentLocalCache(), experimentalAutoDetectLongPolling: true });
+const db = initializeFirestore(app, { localCache: persistentLocalCache(), experimentalAutoDetectLongPolling: true }); // works offline, syncs later
 
 var CATEGORIES = { grocery: "Grocery store", retail: "Retail shop", wholesale: "Wholesaler", other: "Other" };
-var VIEWS = ["loading", "login", "pin", "register", "dashboard", "products", "inventory", "pos", "reports"];
-var APPVIEWS = ["dashboard", "products", "inventory", "pos", "reports"];
+var VIEWS = ["loading", "login", "pin", "register", "dashboard", "products", "inventory", "pos", "reports", "sales", "settings"];
+var APPVIEWS = ["dashboard", "products", "inventory", "pos", "reports", "sales"];
 var view = "dashboard";
 try { view = sessionStorage.getItem("bepal.view") || "dashboard"; } catch (e) {}
 var user = null, business = null, sales = [], loaded = false, locked = false, pinMode = "unlock", fails = 0, unsubB = null, unsubS = null;
@@ -70,7 +71,7 @@ function stop() {
 // ----- Login and PIN -----
 var AUTH_ERR = { "auth/invalid-credential": "Wrong email or password.", "auth/invalid-email": "That email looks wrong.",
   "auth/email-already-in-use": "This email already has an account. Sign in instead.", "auth/weak-password": "Password must be at least 6 characters.",
-  "auth/network-request-failed": "No internet connection.", "auth/too-many-requests": "Too many tries. Wait a while and try again." };
+  "auth/network-request-failed": "No internet connection.", "auth/requires-recent-login": "Please sign out, sign in again, then retry.", "auth/too-many-requests": "Too many tries. Wait a while and try again." };
 function authFail(e) { $("aMsg").textContent = AUTH_ERR[e.code] || e.message; }
 $("loginForm").addEventListener("submit", function (e) {
   e.preventDefault(); $("aMsg").textContent = "";
@@ -135,9 +136,9 @@ function show() {
   else if (locked) v = "pin";
   else if (!loaded) v = "loading";
   else if (!business) v = "register";
-  else v = APPVIEWS.indexOf(view) < 0 ? "dashboard" : view;
+  else v = (APPVIEWS.indexOf(view) < 0 && view !== "settings") ? "dashboard" : view;
   if (APPVIEWS.indexOf(v) >= 0) { try { sessionStorage.setItem("bepal.view", v); } catch (e) {} }
-  VIEWS.forEach(function (n) { $("view" + n.charAt(0).toUpperCase() + n.slice(1)).hidden = n !== v; });
+  VIEWS.forEach(function (n) { var el = $("view" + n.charAt(0).toUpperCase() + n.slice(1)); if (el) el.hidden = n !== v; });
   if (v === "pin") {
     var set = pinMode === "set";
     $("pinTitle").textContent = set ? "Create a 4-digit PIN for this phone" : "Enter PIN";
@@ -154,8 +155,9 @@ function show() {
   if (v === "inventory") renderInventory();
   if (v === "pos") { renderPos(); renderCart(); }
   if (v === "reports") renderReports();
+  if (v === "sales") renderSales();
 }
-function go(v) { view = v; query = ""; posQ = ""; $("search").value = ""; $("posSearch").value = ""; closeForm(); show(); }
+function go(v) { view = v; query = ""; posQ = ""; $("search").value = ""; $("posSearch").value = ""; closeForm(); show(); if (v === "settings") fillSettings(); }
 
 // ----- Products -----
 function renderProducts() {
@@ -256,7 +258,7 @@ $("sellBtn").addEventListener("click", function () {
   }
   cart.forEach(function (l) {
     var p = find(l.id);
-    items.push({ name: p.name, qty: l.qty, price: p.price, cost: p.cost });
+    items.push({ pid: p.id, name: p.name, qty: l.qty, price: p.price, cost: p.cost });
     total += p.price * l.qty; profit += (p.price - p.cost) * l.qty; p.stock -= l.qty;
   });
   var sale = { id: Date.now(), date: new Date().toISOString(), items: items, total: total, profit: profit };
@@ -277,6 +279,7 @@ $("printBtn").addEventListener("click", function () { window.print(); });
 function renderReports() {
   var per = $("repPeriod").value, now = Date.now();
   var list = business.sales.filter(function (s) {
+    if (s.cancelled) return false;
     var t = new Date(s.date);
     if (per === "today") return t.toDateString() === new Date().toDateString();
     if (per === "week") return now - t.getTime() < 7 * 864e5;
@@ -293,6 +296,88 @@ function renderReports() {
     '<h3>Needs restocking</h3><div class="list">' + (low.length ? low.map(function (p) { return '<div class="item"><div class="name">' + esc(p.name) + '</div><div class="price">' + esc(stockText(p)) + '</div></div>'; }).join("") : '<div class="empty">Nothing is low.</div>') + '</div>';
 }
 $("repPeriod").addEventListener("change", renderReports);
+
+// ----- Sales history and cancelling a sale -----
+function renderSales() {
+  var arr = business.sales.slice().sort(function (a, b) { return b.id - a.id; }).slice(0, 50);
+  $("salesList").innerHTML = arr.length ? arr.map(function (s) {
+    var names = s.items.map(function (i) { return esc(i.name) + " x" + i.qty; }).join(", ");
+    return '<div class="item"><div><div class="name">' + esc(money(s.total)) + (s.cancelled ? '<span class="badge">Cancelled</span>' : '') + '</div>' +
+      '<div class="cat">' + esc(new Date(s.date).toLocaleString()) + '<br>' + names + '</div></div>' +
+      (s.cancelled ? '' : '<button class="eb" type="button" data-cancel="' + s.id + '">Cancel</button>') + '</div>';
+  }).join("") : '<div class="empty">No sales yet.</div>';
+}
+function cancelSale(id) {
+  var s = business.sales.filter(function (x) { return x.id === id; })[0];
+  if (!s || s.cancelled) return;
+  if (!confirm("Cancel this sale and put the items back in stock?")) return;
+  s.items.forEach(function (i) {
+    var p = i.pid ? find(i.pid) : business.products.filter(function (x) { return x.name === i.name; })[0];
+    if (p) p.stock += i.qty;
+  });
+  s.cancelled = true; s.cancelledAt = new Date().toISOString();
+  saveBusiness();
+  setDoc(doc(salesCol(), String(s.id)), s).catch(fail);
+  renderSales();
+}
+if ($("salesList")) $("salesList").addEventListener("click", function (e) {
+  var b = e.target.closest("[data-cancel]"); if (b) cancelSale(Number(b.getAttribute("data-cancel")));
+});
+if ($("salesBtn")) $("salesBtn").addEventListener("click", function () { go("sales"); });
+
+// ----- Settings -----
+function setMsg(t) { $("setMsg").textContent = t; }
+function setErr(e) { setMsg(AUTH_ERR[e.code] || e.message); }
+function reauth(pw) { return reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, pw)); }
+function fillSettings() {
+  setMsg(""); $("setEmail").textContent = user.email;
+  $("sName").value = business.name; $("sOwner").value = business.owner; $("sPhone").value = business.phone;
+  $("sCat").value = business.category; $("sCur").value = business.currency;
+  ["curPass", "newPass", "mailPass", "newMail", "dangerPass"].forEach(function (i) { $(i).value = ""; });
+}
+function deleteAllSales() {
+  return getDocs(salesCol()).then(function (snap) { return Promise.all(snap.docs.map(function (d) { return deleteDoc(d.ref); })); });
+}
+$("bizForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+  business.name = $("sName").value.trim(); business.owner = $("sOwner").value.trim(); business.phone = $("sPhone").value.trim();
+  business.category = $("sCat").value; business.currency = $("sCur").value.trim() || "Rs";
+  saveBusiness(); setMsg("Business details saved.");
+});
+$("passForm").addEventListener("submit", function (e) {
+  e.preventDefault(); setMsg("");
+  reauth($("curPass").value).then(function () { return updatePassword(user, $("newPass").value); })
+    .then(function () { setMsg("Password changed."); $("curPass").value = ""; $("newPass").value = ""; }).catch(setErr);
+});
+$("mailForm").addEventListener("submit", function (e) {
+  e.preventDefault(); setMsg("");
+  var m = $("newMail").value.trim();
+  reauth($("mailPass").value).then(function () { return verifyBeforeUpdateEmail(user, m); })
+    .then(function () { setMsg("Check " + m + " for a link. Your email changes after you open it. Then sign in again."); $("mailPass").value = ""; }).catch(setErr);
+});
+function csvCell(v) { v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+$("exportBtn").addEventListener("click", function () {
+  var rows = [["Date", "Status", "Item", "Qty", "Price", "Cost", "Line total"]];
+  business.sales.slice().sort(function (a, b) { return a.id - b.id; }).forEach(function (s) {
+    s.items.forEach(function (i) { rows.push([new Date(s.date).toLocaleString(), s.cancelled ? "Cancelled" : "Completed", i.name, i.qty, i.price, i.cost, i.price * i.qty]); });
+  });
+  var csv = "\ufeff" + rows.map(function (r) { return r.map(csvCell).join(","); }).join("\n");
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "bepal-sales.csv"; a.click();
+});
+$("delHistBtn").addEventListener("click", function () {
+  if (!business.sales.length) { setMsg("There is no sales history."); return; }
+  if (prompt("This permanently deletes ALL sales history and reports. Download the spreadsheet first if you need it. Type DELETE to confirm.") !== "DELETE") return;
+  deleteAllSales().then(function () { setMsg("Sales history deleted."); }).catch(fail);
+});
+$("delAcctBtn").addEventListener("click", function () {
+  var pw = $("dangerPass").value;
+  if (!pw) { setMsg("Type your current password in the box first."); return; }
+  if (prompt("This permanently deletes your account, business, products and sales. Type DELETE to confirm.") !== "DELETE") return;
+  var uid = user.uid;
+  reauth(pw).then(deleteAllSales).then(function () { return deleteDoc(bizRef()); }).then(function () { return deleteUser(user); })
+    .then(function () { localStorage.removeItem("bepal.pin." + uid); localStorage.removeItem("bepal.skip." + uid); }).catch(setErr);
+});
 
 // ----- Business setup and navigation -----
 $("registerForm").addEventListener("submit", function (e) {

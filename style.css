@@ -43,3 +43,4 @@ input, select { width: 100%; padding: 10px; font-size: 1rem; border: 1px solid #
 #pinInput { text-align: center; font-size: 1.6rem; letter-spacing: 8px; }
 .top { background: #fff; border-bottom: 3px solid #022964; padding: 10px 16px; }
 .brand { height: 60px; width: auto; display: block; }
+.btn.danger { color: #a32020; border-color: #a32020; }
