@@ -1,4 +1,4 @@
-var CACHE = "bepal-v2";
+var CACHE = "bepal-v3";
 var FILES = ["./", "./index.html", "./style.css", "./script.js", "./manifest.json", "./icon-192.png", "./icon-512.png", "./logo.png"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {
@@ -16,7 +16,7 @@ self.addEventListener("activate", function (e) {
 self.addEventListener("fetch", function (e) {
   var r = e.request, u = new URL(r.url);
   if (r.method !== "GET" || (u.origin !== self.location.origin && u.hostname !== "www.gstatic.com")) return;
-  e.respondWith(fetch(r).then(function (res) {
+  e.respondWith(fetch(r, { cache: "no-cache" }).then(function (res) {
     if (res.ok) { var c = res.clone(); caches.open(CACHE).then(function (h) { h.put(r, c); }); }
     return res;
   }).catch(function () { return caches.match(r); }));
