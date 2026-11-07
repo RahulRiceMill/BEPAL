@@ -589,3 +589,14 @@ document.querySelectorAll(".back").forEach(function (b) { b.addEventListener("cl
 show();
 if (lang === "ne") { applyLang(document.body); document.documentElement.lang = "ne"; }
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
+// ----- Install screen (shown when the app is opened from the website) -----
+var deferredInstall = null;
+function isInstalled() { return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; }
+window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferredInstall = e; if ($("installBtn")) $("installBtn").hidden = false; });
+window.addEventListener("appinstalled", function () {
+  if ($("installMsg")) $("installMsg").textContent = "Installed. Open BEPAL from your home screen.";
+  if ($("installBtn")) $("installBtn").hidden = true;
+});
+if ($("installBox") && /[?&]install=1/.test(location.search) && !isInstalled()) $("installBox").hidden = false;
+on("installBtn", "click", function () { if (!deferredInstall) return; deferredInstall.prompt(); deferredInstall = null; $("installBtn").hidden = true; });
+on("installSkip", "click", function () { $("installBox").hidden = true; });
