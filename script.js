@@ -514,7 +514,7 @@ function stopCamera() {
   sc.stop().then(function () { sc.clear(); }).catch(function () {});
 }
 function openScan(mode) {
-  scanMode = mode; scanBusy = false; $("scanBox").hidden = false;
+  scanMode = mode; scanBusy = false; lastAdded = ""; $("scanBox").hidden = false;
   $("scanAgain").hidden = mode === "cart"; $("scanClose").textContent = mode === "cart" ? "Done" : "Close"; $("scanInfo").hidden = true; $("scanMsg").textContent = "";
   if (!window.Html5Qrcode) { $("scanMsg").textContent = "The scanner could not load. Check your internet and reload."; return; }
   stopCamera();
@@ -525,20 +525,32 @@ function openScan(mode) {
     .catch(function (e) { $("scanMsg").textContent = "Could not open the camera. Allow camera access and try again."; scanner = null; });
 }
 function closeScan() { stopCamera(); $("scanBox").hidden = true; }
-var lastCode = "", lastSeen = 0;
+var lastCode = "", lastSeen = 0, lastAdded = "";
 function isRepeat(code) {   // the same code in view is counted once until it leaves the camera for a moment
   var n = Date.now(), r = code === lastCode && n - lastSeen < 1500;
   lastCode = code; lastSeen = n; return r;
 }
+function cartLine(p) {
+  var l = cart.filter(function (x) { return x.id === p.id; })[0], q = l ? l.qty : 0;
+  var box = $("scanInfo"); box.hidden = false;
+  box.innerHTML = '<div class="item"><div><div class="name">' + esc(p.name) + '</div><div class="cat">' + esc($("cartTotal").textContent) + '</div></div>' +
+    '<div class="price"><button class="eb" type="button" data-q="-1" data-id="' + p.id + '">-</button> ' + q +
+    ' <button class="eb" type="button" data-q="1" data-id="' + p.id + '">+</button></div></div>';
+}
+on("scanInfo", "click", function (e) {
+  var b = e.target.closest("[data-q]"); if (!b || scanMode !== "cart") return;
+  var p = find(Number(b.getAttribute("data-id"))); if (!p) return;
+  changeQty(p.id, Number(b.getAttribute("data-q"))); cartLine(p);
+});
 function onScan(code) {
   code = String(code).trim();
   var p = business.products.filter(function (x) { return x.barcode === code; })[0];
   if (scanMode === "cart") {
-    if (isRepeat(code)) return;
+    if (code === lastAdded) return;   // the same item is still in front of the camera: ignore it, use + on the screen for more
+    lastAdded = code;
     if (!p) { $("scanMsg").textContent = "No product has the barcode " + code; return; }
-    changeQty(p.id, 1);
-    var l = cart.filter(function (x) { return x.id === p.id; })[0];
-    $("scanMsg").textContent = "Added: " + p.name + "  |  in cart: " + (l ? l.qty : 0) + "  |  " + $("cartTotal").textContent;
+    $("scanMsg").textContent = "";
+    changeQty(p.id, 1); cartLine(p);
     try { navigator.vibrate(60); } catch (e) {}
     return;
   }
