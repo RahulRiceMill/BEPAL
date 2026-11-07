@@ -594,6 +594,7 @@ var deferredInstall = null;
 function isInstalled() { return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; }
 window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferredInstall = e; if ($("installBtn")) $("installBtn").hidden = false; });
 window.addEventListener("appinstalled", function () {
+    if (window.gtag) gtag("event", "app_install");
   if ($("installMsg")) $("installMsg").textContent = "Installed. Open BEPAL from your home screen.";
   if ($("installBtn")) $("installBtn").hidden = true;
 });
