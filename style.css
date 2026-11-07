@@ -44,3 +44,7 @@ input, select { width: 100%; padding: 10px; font-size: 1rem; border: 1px solid #
 .top { background: #fff; border-bottom: 3px solid #022964; padding: 10px 16px; }
 .brand { height: 60px; width: auto; display: block; }
 .btn.danger { color: #a32020; border-color: #a32020; }
+.chk { display: flex; align-items: center; gap: 8px; font-weight: normal; }
+.chk input { width: auto; margin: 0; }
+#scanBox { position: fixed; inset: 0; background: #fff; z-index: 20; overflow: auto; padding: 16px; }
+#reader { width: 100%; max-width: 420px; margin: 0 auto; }

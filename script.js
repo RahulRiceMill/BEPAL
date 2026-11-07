@@ -17,9 +17,9 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = initializeFirestore(app, { localCache: persistentLocalCache(), experimentalAutoDetectLongPolling: true }); // works offline, syncs later
 
-var CATEGORIES = { grocery: "Grocery store", retail: "Retail shop", wholesale: "Wholesaler", other: "Other" };
-var VIEWS = ["loading", "login", "pin", "register", "dashboard", "products", "inventory", "pos", "reports", "sales", "settings"];
-var APPVIEWS = ["dashboard", "products", "inventory", "pos", "reports", "sales"];
+var CATEGORIES = { grocery: "Grocery store", retail: "Retail shop", wholesale: "Wholesaler", mill: "Mill / service", other: "Other" };
+var VIEWS = ["loading", "login", "pin", "register", "dashboard", "products", "inventory", "pos", "reports", "sales", "settings", "credit"];
+var APPVIEWS = ["dashboard", "products", "inventory", "pos", "reports", "sales", "credit"];
 var view = "dashboard";
 try { view = sessionStorage.getItem("bepal.view") || "dashboard"; } catch (e) {}
 var user = null, business = null, sales = [], loaded = false, locked = false, pinMode = "unlock", fails = 0, unsubB = null, unsubS = null;
@@ -46,6 +46,8 @@ function saveBusiness() {
   return true;
 }
 function norm(b) {
+  b.customers = Array.isArray(b.customers) ? b.customers : [];
+  b.ledger = Array.isArray(b.ledger) ? b.ledger : [];
   b.products = Array.isArray(b.products) ? b.products : [];
   b.products.forEach(function (p) { p.cost = num(p.cost); p.stock = num(p.stock); p.low = num(p.low); });
   b.sales = sales;
@@ -150,12 +152,14 @@ function show() {
   $("dName").textContent = business.name;
   $("dInfo").textContent = CATEGORIES[business.category] + " | Owner: " + business.owner + " | " + business.phone;
   var low = business.products.filter(isLow).length;
-  $("dAlert").textContent = low ? low + " product(s) low or out of stock." : "";
+  var soon = business.products.filter(function (p) { var d = daysLeft(p.exp); return d !== null && d <= 30; }).length;
+  $("dAlert").textContent = (low ? low + " product(s) low or out of stock. " : "") + (soon ? soon + " product(s) expired or expiring within 30 days." : "");
   if (v === "products") renderProducts();
   if (v === "inventory") renderInventory();
   if (v === "pos") { renderPos(); renderCart(); }
   if (v === "reports") renderReports();
   if (v === "sales") renderSales();
+  if (v === "credit") renderCredit();
 }
 function go(v) { view = v; query = ""; posQ = ""; $("search").value = ""; $("posSearch").value = ""; closeForm(); show(); if (v === "settings") fillSettings(); }
 
@@ -179,6 +183,7 @@ function openForm(id) {
   $("pFormTitle").textContent = id ? "Edit product" : "Add product";
   $("pName").value = p.name || ""; $("pPrice").value = p.price != null ? p.price : ""; $("pCost").value = p.cost || "";
   $("pStock").value = p.stock || ""; $("pLow").value = p.low || ""; $("pUnit").value = p.unit || ""; $("pCat").value = p.cat || "";
+  $("pBarcode").value = p.barcode || ""; $("pMfg").value = p.mfg || ""; $("pExp").value = p.exp || "";
   $("pDelete").hidden = !id; $("productForm").hidden = false; $("addBtn").hidden = true; $("pName").focus();
 }
 function closeForm() { editId = null; $("productForm").hidden = true; $("addBtn").hidden = false; }
@@ -189,7 +194,9 @@ $("list").addEventListener("click", function (e) { var b = e.target.closest("[da
 $("productForm").addEventListener("submit", function (e) {
   e.preventDefault();
   var d = { name: $("pName").value.trim(), price: num($("pPrice").value), cost: num($("pCost").value), stock: num($("pStock").value),
-            low: num($("pLow").value), unit: $("pUnit").value.trim(), cat: $("pCat").value.trim() };
+            low: num($("pLow").value), unit: $("pUnit").value.trim(), cat: $("pCat").value.trim(),
+            barcode: $("pBarcode").value.trim(), mfg: $("pMfg").value, exp: $("pExp").value };
+  if (d.barcode && business.products.some(function (p) { return p.barcode === d.barcode && p.id !== editId; })) { alert("Another product already has this barcode."); return; }
   if (editId) Object.assign(find(editId), d); else { d.id = Date.now(); business.products.push(d); }
   saveBusiness(); closeForm(); renderProducts();
 });
@@ -379,15 +386,179 @@ $("delAcctBtn").addEventListener("click", function () {
     .then(function () { localStorage.removeItem("bepal.pin." + uid); localStorage.removeItem("bepal.skip." + uid); }).catch(setErr);
 });
 
+// ----- Starter products by category -----
+var STARTERS = {
+  grocery: [["Rice", "kg", "Grocery"], ["Sugar", "kg", "Grocery"], ["Salt", "kg", "Grocery"], ["Cooking oil", "litre", "Grocery"], ["Lentils (dal)", "kg", "Grocery"], ["Noodles", "packet", "Snacks"]],
+  retail: [["Notebook", "piece", "Stationery"], ["Pen", "piece", "Stationery"], ["Soap", "piece", "Household"], ["Shampoo", "sachet", "Personal care"], ["Biscuits", "packet", "Snacks"]],
+  wholesale: [["Rice", "sack", "Grains"], ["Sugar", "sack", "Grains"], ["Cooking oil", "carton", "Oil"], ["Noodles", "carton", "Snacks"]],
+  mill: [["Milling - Sailer", "quintal", "Milling"], ["Milling - Huller", "quintal", "Milling"], ["Grinding - Wheat and rice", "kg", "Grinding"], ["Oil pressing - Mustard seed", "kg", "Oil pressing"]],
+  other: []
+};
+function starter(cat) {
+  return (STARTERS[cat] || []).map(function (r, i) { return { id: Date.now() + i, name: r[0], unit: r[1], cat: r[2], price: 0, cost: 0, stock: 0, low: 0 }; });
+}
+
+// ----- Credit (udhar) -----
+var openCid = null;
+function on(id, ev, fn) { var e = $(id); if (e) e.addEventListener(ev, fn); }
+function custBal(c) {
+  return business.ledger.filter(function (e) { return e.cid === c.id; }).reduce(function (t, e) { return t + (e.type === "credit" ? e.amount : -e.amount); }, 0);
+}
+function renderCredit() {
+  var q = ($("custSearch").value || "").toLowerCase();
+  var rows = business.customers.filter(function (c) { return c.name.toLowerCase().indexOf(q) >= 0; });
+  $("creditTotal").textContent = "Total owed to you: " + money(business.customers.reduce(function (t, c) { return t + custBal(c); }, 0));
+  $("custList").innerHTML = rows.length ? rows.map(function (c) {
+    return '<div class="item"><div><div class="name">' + esc(c.name) + '</div><div class="cat">' + esc(c.phone || "") + '</div></div><div class="price">' +
+      esc(money(custBal(c))) + '<br><button class="eb" type="button" data-cust="' + c.id + '">Open</button></div></div>';
+  }).join("") : '<div class="empty">No customers yet.</div>';
+  var c = business.customers.filter(function (x) { return x.id === openCid; })[0];
+  $("custBox").hidden = !c;
+  if (!c) return;
+  $("custName").textContent = c.name + " owes " + money(custBal(c));
+  var h = business.ledger.filter(function (e) { return e.cid === c.id; }).sort(function (a, b) { return b.id - a.id; }).slice(0, 30);
+  $("custHist").innerHTML = h.length ? h.map(function (e) {
+    return '<div class="item"><div><div class="name">' + (e.type === "credit" ? "Took on credit " : "Paid ") + esc(money(e.amount)) + '</div><div class="cat">' +
+      esc(new Date(e.date).toLocaleDateString()) + (e.note ? " | " + esc(e.note) : "") + '</div></div></div>';
+  }).join("") : '<div class="empty">No entries yet.</div>';
+}
+function addEntry(type) {
+  var a = parseFloat(prompt((type === "credit" ? "Amount on credit" : "Amount paid") + " (" + business.currency + ")"));
+  if (!(a > 0)) return;
+  var note = prompt("Note (optional)") || "";
+  business.ledger.push({ id: Date.now(), cid: openCid, type: type, amount: a, date: new Date().toISOString(), note: note });
+  saveBusiness(); renderCredit();
+}
+on("custSearch", "input", renderCredit);
+on("addCustBtn", "click", function () {
+  var n = (prompt("Customer name") || "").trim(); if (!n) return;
+  var c = { id: Date.now(), name: n, phone: (prompt("Phone number (optional)") || "").trim() };
+  business.customers.push(c); openCid = c.id; saveBusiness(); renderCredit();
+});
+on("custList", "click", function (e) { var b = e.target.closest("[data-cust]"); if (b) { openCid = Number(b.getAttribute("data-cust")); renderCredit(); } });
+on("btnCredit", "click", function () { addEntry("credit"); });
+on("btnPaid", "click", function () { addEntry("payment"); });
+on("btnDelCust", "click", function () {
+  if (!confirm("Delete this customer and all their credit records?")) return;
+  business.customers = business.customers.filter(function (c) { return c.id !== openCid; });
+  business.ledger = business.ledger.filter(function (e) { return e.cid !== openCid; });
+  openCid = null; saveBusiness(); renderCredit();
+});
+
+// ----- Nepali language for the app screens -----
+var NE = {
+  "Sign in": "साइन इन", "Create new account": "नयाँ खाता बनाउनुहोस्", "Forgot password?": "पासवर्ड बिर्सनुभयो?", "Email": "इमेल",
+  "Password (at least 6 characters)": "पासवर्ड (कम्तीमा ६ अक्षर)", "Enter PIN": "PIN हाल्नुहोस्", "Unlock": "खोल्नुहोस्", "Skip": "छोड्नुहोस्",
+  "Use password instead": "पासवर्ड प्रयोग गर्नुहोस्", "Set up your business": "आफ्नो व्यवसाय सेटअप गर्नुहोस्", "Business name": "व्यवसायको नाम",
+  "Owner name": "मालिकको नाम", "Phone number": "फोन नम्बर", "Business category": "व्यवसायको प्रकार", "Currency symbol": "मुद्रा चिन्ह",
+  "Save business": "व्यवसाय सेभ गर्नुहोस्", "Grocery store": "किराना पसल", "Retail shop": "खुद्रा पसल", "Wholesaler": "थोक व्यापारी", "Other": "अन्य",
+  "Mill / service": "मिल / सेवा", "Products": "सामान", "POS / Billing": "बिलिङ (POS)", "Inventory": "स्टक", "Reports": "रिपोर्ट", "Settings": "सेटिङ",
+  "Credit (Udhar)": "उधारो", "← Dashboard": "← ड्यासबोर्ड", "Search products": "सामान खोज्नुहोस्", "Search product to add": "थप्ने सामान खोज्नुहोस्",
+  "Search customers": "ग्राहक खोज्नुहोस्", "+ Add product": "+ सामान थप्नुहोस्", "Add product": "सामान थप्नुहोस्", "Edit product": "सामान सम्पादन",
+  "Product name": "सामानको नाम", "Selling price": "बिक्री मूल्य", "Cost price (what you paid)": "खरिद मूल्य (तिरेको)", "Stock in hand": "हालको स्टक",
+  "Warn me when stock is at or below": "स्टक यति वा कम भएमा सूचना दिनुहोस्", "Unit (kg, piece, packet...)": "एकाइ (केजी, थान, प्याकेट...)",
+  "Category": "श्रेणी", "Save product": "सामान सेभ गर्नुहोस्", "Cancel": "रद्द", "Delete product": "सामान हटाउनुहोस्", "Edit": "सम्पादन", "Low": "कम",
+  "+ Stock": "+ स्टक", "+ Add": "+ थप्नुहोस्", "Cart": "कार्ट", "Complete sale": "बिक्री पूरा गर्नुहोस्", "Receipt": "रसिद", "Share receipt": "रसिद सेयर",
+  "Print": "प्रिन्ट", "Today": "आज", "Last 7 days": "पछिल्लो ७ दिन", "All time": "सबै समय", "Sales": "बिक्री", "Revenue": "आम्दानी", "Profit": "नाफा",
+  "Low stock items": "कम स्टक भएका सामान", "Best sellers": "धेरै बिक्ने", "Needs restocking": "फेरि भर्नुपर्ने", "Sales history and cancel": "बिक्री इतिहास र रद्द",
+  "Sales history": "बिक्री इतिहास", "Business": "व्यवसाय", "Account": "खाता", "Security": "सुरक्षा", "Your data": "तपाईंको डाटा", "Language": "भाषा",
+  "Save business details": "विवरण सेभ गर्नुहोस्", "Change email": "इमेल परिवर्तन", "Change password": "पासवर्ड परिवर्तन", "Lock now": "अहिले लक गर्नुहोस्",
+  "Change PIN": "PIN परिवर्तन", "Sign out": "साइन आउट", "Download sales (spreadsheet)": "बिक्री डाउनलोड (स्प्रेडसिट)", "Delete sales history": "बिक्री इतिहास मेट्नुहोस्",
+  "Delete account": "खाता मेट्नुहोस्", "Delete account and all data": "खाता र सबै डाटा मेट्नुहोस्", "Loading...": "लोड हुँदैछ...", "Cancelled": "रद्द भएको",
+  "No products yet. Tap + Add product.": "कुनै सामान छैन। + सामान थप्नुहोस् थिच्नुहोस्।", "No products found.": "सामान फेला परेन।", "Cart is empty.": "कार्ट खाली छ।",
+  "No sales yet.": "अहिलेसम्म बिक्री छैन।", "Add customer": "ग्राहक थप्नुहोस्", "Record credit": "उधारो चढाउनुहोस्", "Record payment": "भुक्तानी लिनुहोस्",
+  "No customers yet.": "अहिलेसम्म ग्राहक छैन।", "No entries yet.": "अहिलेसम्म कुनै लेखा छैन।", "Open": "खोल्नुहोस्", "Delete this customer": "यो ग्राहक हटाउनुहोस्",
+  "Add sample products for this category": "यो प्रकारका नमुना सामान थप्नुहोस्"
+};
+var lang = "en";
+try { lang = localStorage.getItem("bepal.lang") || "en"; } catch (e) {}
+var orig = new WeakMap();
+function applyLang(root) {
+  var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), n;
+  while ((n = w.nextNode())) {
+    var t = n.nodeValue.trim();
+    if (!t) continue;
+    if (lang === "ne") { if (NE[t]) { orig.set(n, n.nodeValue); n.nodeValue = n.nodeValue.replace(t, NE[t]); } }
+    else if (orig.has(n)) { n.nodeValue = orig.get(n); orig.delete(n); }
+  }
+  if (root.querySelectorAll) root.querySelectorAll("[placeholder]").forEach(function (e) {
+    var p = e.getAttribute("data-ph") || e.getAttribute("placeholder");
+    e.setAttribute("data-ph", p); e.setAttribute("placeholder", lang === "ne" && NE[p] ? NE[p] : p);
+  });
+}
+new MutationObserver(function (ms) {
+  if (lang !== "ne") return;
+  ms.forEach(function (m) { m.addedNodes.forEach(function (a) { if (a.nodeType === 1) applyLang(a); else if (a.parentNode) applyLang(a.parentNode); }); });
+}).observe(document.body, { childList: true, subtree: true });
+on("sLang", "change", function () {
+  lang = this.value; try { localStorage.setItem("bepal.lang", lang); } catch (e) {}
+  applyLang(document.body); document.documentElement.lang = lang; show();
+});
+if ($("sLang")) $("sLang").value = lang;
+
+// ----- Barcode / QR scanner and expiry dates -----
+function daysLeft(d) {
+  if (!d) return null;
+  var t = new Date(); t.setHours(0, 0, 0, 0);
+  return Math.round((new Date(d + "T00:00:00") - t) / 864e5);
+}
+function dateInfo(d) {
+  if (!d) return "-";
+  var n = daysLeft(d), t = new Date(d + "T00:00:00").toLocaleDateString();
+  return n < 0 ? t + " (EXPIRED)" : n <= 30 ? t + " (" + n + " days left)" : t;
+}
+var scanner = null, scanMode = "info";
+function stopCamera() {
+  if (!scanner) return;
+  var sc = scanner; scanner = null;
+  sc.stop().then(function () { sc.clear(); }).catch(function () {});
+}
+function openScan(mode) {
+  scanMode = mode; $("scanBox").hidden = false; $("scanInfo").hidden = true; $("scanMsg").textContent = "";
+  if (!window.Html5Qrcode) { $("scanMsg").textContent = "The scanner could not load. Check your internet and reload."; return; }
+  stopCamera();
+  scanner = new Html5Qrcode("reader");
+  scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 160 } }, onScan, function () {})
+    .catch(function (e) { $("scanMsg").textContent = "Could not open the camera. Allow camera access and try again."; scanner = null; });
+}
+function closeScan() { stopCamera(); $("scanBox").hidden = true; }
+function onScan(code) {
+  code = String(code).trim();
+  var p = business.products.filter(function (x) { return x.barcode === code; })[0];
+  if (scanMode === "fill") { $("pBarcode").value = code; closeScan(); return; }
+  if (scanMode === "cart") {
+    if (p) { closeScan(); changeQty(p.id, 1); } else $("scanMsg").textContent = "No product has the barcode " + code;
+    return;
+  }
+  stopCamera();
+  var box = $("scanInfo"); box.hidden = false;
+  if (!p) {
+    box.innerHTML = '<div class="empty">No product has the barcode ' + esc(code) + '.<br><button class="eb" type="button" id="scanNew">Add as new product</button></div>';
+    $("scanNew").addEventListener("click", function () { closeScan(); go("products"); openForm(null); $("pBarcode").value = code; });
+    return;
+  }
+  box.innerHTML = '<div class="item"><div><div class="name">' + esc(p.name) + '</div><div class="cat">' + esc(p.cat || "") + '</div>' +
+    '<p>Price: <strong>' + esc(money(p.price)) + (p.unit ? " / " + esc(p.unit) : "") + '</strong><br>Stock: ' + esc(stockText(p)) + (isLow(p) ? '<span class="badge">Low</span>' : '') +
+    '<br>Production date: ' + esc(dateInfo(p.mfg)) + '<br>Expiry date: ' + esc(dateInfo(p.exp)) + '<br>Barcode: ' + esc(code) + '</p></div></div>';
+}
+on("scanBtn1", "click", function () { openScan("info"); });
+on("scanBtn2", "click", function () { openScan("cart"); });
+on("scanFill", "click", function () { openScan("fill"); });
+on("scanAgain", "click", function () { openScan(scanMode); });
+on("scanClose", "click", closeScan);
+Object.assign(NE, { "Scan barcode": "बारकोड स्क्यान", "Scan to add": "स्क्यान गरेर थप्नुहोस्", "Scan": "स्क्यान", "Scan again": "फेरि स्क्यान", "Close": "बन्द गर्नुहोस्",
+  "Barcode / QR code": "बारकोड / QR कोड", "Production date": "उत्पादन मिति", "Expiry date": "म्याद सकिने मिति", "Scan barcode / QR code": "बारकोड / QR कोड स्क्यान" });
+
 // ----- Business setup and navigation -----
 $("registerForm").addEventListener("submit", function (e) {
   e.preventDefault();
   business = { name: $("bName").value.trim(), owner: $("bOwner").value.trim(), phone: $("bPhone").value.trim(), category: $("bCategory").value,
-               currency: $("bCurrency").value.trim() || "Rs", products: [], sales: sales, createdAt: new Date().toISOString() };
+               currency: $("bCurrency").value.trim() || "Rs", products: ($("bSample") && $("bSample").checked) ? starter($("bCategory").value) : [], customers: [], ledger: [], sales: sales, createdAt: new Date().toISOString() };
   view = "dashboard"; saveBusiness(); show();
 });
 document.querySelectorAll(".tile").forEach(function (t) { t.addEventListener("click", function () { go(t.getAttribute("data-go")); }); });
 document.querySelectorAll(".back").forEach(function (b) { b.addEventListener("click", function () { go("dashboard"); }); });
 
 show();
+if (lang === "ne") { applyLang(document.body); document.documentElement.lang = "ne"; }
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});

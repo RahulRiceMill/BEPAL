@@ -53,6 +53,7 @@
           <option value="other">Other</option>
         </select>
         <label for="bCurrency">Currency symbol</label><input id="bCurrency" value="Rs" maxlength="6">
+                <label class="chk"><input type="checkbox" id="bSample" checked> Add sample products for this category</label>
         <button class="btn" type="submit">Save business</button>
       </form>
     </section>
@@ -66,6 +67,7 @@
         <button class="tile" type="button" data-go="inventory">Inventory</button>
         <button class="tile" type="button" data-go="reports">Reports</button>
                 <button class="tile" type="button" data-go="settings">Settings</button>
+                        <button class="tile" type="button" data-go="credit">Credit (Udhar)</button>
       </div>
       <p class="msg" id="dAlert"></p>
               
@@ -77,6 +79,7 @@
       <input id="search" type="search" placeholder="Search products">
       <div class="list" id="list"></div>
       <button class="btn" type="button" id="addBtn">+ Add product</button>
+            <button class="btn alt" type="button" id="scanBtn1">Scan barcode</button>
       <form id="productForm" hidden>
         <h3 id="pFormTitle">Add product</h3>
         <label for="pName">Product name</label><input id="pName" required>
@@ -86,6 +89,10 @@
         <label for="pLow">Warn me when stock is at or below</label><input id="pLow" type="number" min="0" step="any" inputmode="decimal">
         <label for="pUnit">Unit (kg, piece, packet...)</label><input id="pUnit">
         <label for="pCat">Category</label><input id="pCat" list="catList"><datalist id="catList"></datalist>
+                <label for="pBarcode">Barcode / QR code</label><input id="pBarcode">
+        <button class="btn alt" type="button" id="scanFill">Scan</button>
+        <label for="pMfg">Production date</label><input id="pMfg" type="date">
+        <label for="pExp">Expiry date</label><input id="pExp" type="date">
         <button class="btn" type="submit">Save product</button>
         <button class="btn alt" type="button" id="pCancel">Cancel</button>
         <button class="link" type="button" id="pDelete" hidden>Delete product</button>
@@ -103,6 +110,7 @@
       <button class="back" type="button">&larr; Dashboard</button>
       <h2>POS / Billing</h2>
       <input id="posSearch" type="search" placeholder="Search product to add">
+            <button class="btn alt" type="button" id="scanBtn2">Scan to add</button>
       <div class="list" id="posList"></div>
       <h3>Cart</h3>
       <div class="list" id="cart"></div>
@@ -138,6 +146,7 @@
         <label for="sOwner">Owner name</label><input id="sOwner" required>
         <label for="sPhone">Phone number</label><input id="sPhone" type="tel" required>
         <label for="sCat">Category</label>
+          <option value="mill">Mill / service</option>
         <select id="sCat"><option value="grocery">Grocery store</option><option value="retail">Retail shop</option><option value="wholesale">Wholesaler</option><option value="other">Other</option></select>
         <label for="sCur">Currency symbol</label><input id="sCur" maxlength="6">
         <button class="btn" type="submit">Save business details</button>
@@ -156,6 +165,8 @@
         <button class="btn alt" type="submit">Change password</button>
       </form>
 
+      <h3>Language</h3>
+      <select id="sLang"><option value="en">English</option><option value="ne">नेपाली</option></select>
       <h3>Security</h3>
       <div class="acts">
         <button class="eb" type="button" id="lockBtn">Lock now</button>
@@ -174,7 +185,32 @@
 
       <p class="sub">BEPAL 1.0 | One platform. Every business. Built for Nepal. | <a href="https://rahulricemill.github.io/BEPAL-Website/" target="_blank" rel="noopener">BEPAL website</a></p>
     </section>
+    <section id="viewCredit" hidden>
+      <button class="back" type="button">&larr; Dashboard</button>
+      <h2>Credit (Udhar)</h2>
+      <p class="sub" id="creditTotal"></p>
+      <input id="custSearch" type="search" placeholder="Search customers">
+      <div class="list" id="custList"></div>
+      <button class="btn" type="button" id="addCustBtn">Add customer</button>
+      <div id="custBox" hidden>
+        <h3 id="custName"></h3>
+        <button class="btn" type="button" id="btnCredit">Record credit</button>
+        <button class="btn alt" type="button" id="btnPaid">Record payment</button>
+        <div class="list" id="custHist"></div>
+        <button class="link" type="button" id="btnDelCust">Delete this customer</button>
+      </div>
+    </section>
+
+    <div id="scanBox" hidden>
+      <h3>Scan barcode / QR code</h3>
+      <div id="reader"></div>
+      <p class="msg" id="scanMsg"></p>
+      <div class="list" id="scanInfo" hidden></div>
+      <button class="btn alt" type="button" id="scanAgain">Scan again</button>
+      <button class="btn" type="button" id="scanClose">Close</button>
+    </div>
   </main>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script type="module" src="script.js"></script>
 </body>
 </html>
