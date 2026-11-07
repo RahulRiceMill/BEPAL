@@ -514,24 +514,37 @@ function stopCamera() {
   sc.stop().then(function () { sc.clear(); }).catch(function () {});
 }
 function openScan(mode) {
-  scanMode = mode; scanBusy = false; $("scanBox").hidden = false; $("scanInfo").hidden = true; $("scanMsg").textContent = "";
+  scanMode = mode; scanBusy = false; $("scanBox").hidden = false;
+  $("scanAgain").hidden = mode === "cart"; $("scanClose").textContent = mode === "cart" ? "Done" : "Close"; $("scanInfo").hidden = true; $("scanMsg").textContent = "";
   if (!window.Html5Qrcode) { $("scanMsg").textContent = "The scanner could not load. Check your internet and reload."; return; }
   stopCamera();
-  scanner = new Html5Qrcode("reader");
-  scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 160 } }, onScan, function () {})
+  var F = window.Html5QrcodeSupportedFormats;
+  scanner = new Html5Qrcode("reader", { verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+    formatsToSupport: F ? [F.QR_CODE, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39] : undefined });
+  scanner.start({ facingMode: "environment" }, { fps: 20, qrbox: { width: 300, height: 170 }, disableFlip: true }, onScan, function () {})
     .catch(function (e) { $("scanMsg").textContent = "Could not open the camera. Allow camera access and try again."; scanner = null; });
 }
 function closeScan() { stopCamera(); $("scanBox").hidden = true; }
+var lastCode = "", lastSeen = 0;
+function isRepeat(code) {   // the same code in view is counted once until it leaves the camera for a moment
+  var n = Date.now(), r = code === lastCode && n - lastSeen < 1500;
+  lastCode = code; lastSeen = n; return r;
+}
 function onScan(code) {
-  if (scanBusy) return;   // the camera reports the same code many times a second: use it only once
-  scanBusy = true;
   code = String(code).trim();
   var p = business.products.filter(function (x) { return x.barcode === code; })[0];
-  if (scanMode === "fill") { $("pBarcode").value = code; closeScan(); return; }
   if (scanMode === "cart") {
-    if (p) { closeScan(); changeQty(p.id, 1); } else { $("scanMsg").textContent = "No product has the barcode " + code; setTimeout(function () { scanBusy = false; }, 1500); }
+    if (isRepeat(code)) return;
+    if (!p) { $("scanMsg").textContent = "No product has the barcode " + code; return; }
+    changeQty(p.id, 1);
+    var l = cart.filter(function (x) { return x.id === p.id; })[0];
+    $("scanMsg").textContent = "Added: " + p.name + "  |  in cart: " + (l ? l.qty : 0) + "  |  " + $("cartTotal").textContent;
+    try { navigator.vibrate(60); } catch (e) {}
     return;
   }
+  if (scanBusy) return;
+  scanBusy = true;
+  if (scanMode === "fill") { $("pBarcode").value = code; closeScan(); return; }
   stopCamera();
   var box = $("scanInfo"); box.hidden = false;
   if (!p) {
@@ -548,7 +561,7 @@ on("scanBtn2", "click", function () { openScan("cart"); });
 on("scanFill", "click", function () { openScan("fill"); });
 on("scanAgain", "click", function () { openScan(scanMode); });
 on("scanClose", "click", closeScan);
-Object.assign(NE, { "Scan barcode": "बारकोड स्क्यान", "Scan to add": "स्क्यान गरेर थप्नुहोस्", "Scan": "स्क्यान", "Scan again": "फेरि स्क्यान", "Close": "बन्द गर्नुहोस्",
+Object.assign(NE, { "Done": "सकियो", "Scan barcode": "बारकोड स्क्यान", "Scan to add": "स्क्यान गरेर थप्नुहोस्", "Scan": "स्क्यान", "Scan again": "फेरि स्क्यान", "Close": "बन्द गर्नुहोस्",
   "Barcode / QR code": "बारकोड / QR कोड", "Production date": "उत्पादन मिति", "Expiry date": "म्याद सकिने मिति", "Scan barcode / QR code": "बारकोड / QR कोड स्क्यान" });
 
 // ----- Business setup and navigation -----
