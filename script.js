@@ -18,8 +18,8 @@ const auth = getAuth(app);
 const db = initializeFirestore(app, { localCache: persistentLocalCache(), experimentalAutoDetectLongPolling: true }); // works offline, syncs later
 
 var CATEGORIES = { grocery: "Grocery store", retail: "Retail shop", wholesale: "Wholesaler", mill: "Mill / service", other: "Other" };
-var VIEWS = ["loading", "login", "pin", "register", "dashboard", "products", "inventory", "pos", "reports", "sales", "settings", "credit"];
-var APPVIEWS = ["dashboard", "products", "inventory", "pos", "reports", "sales", "credit"];
+var VIEWS = ["loading", "login", "pin", "register", "dashboard", "products", "inventory", "pos", "reports", "sales", "settings", "credit", "rates"];
+var APPVIEWS = ["dashboard", "products", "inventory", "pos", "reports", "sales", "credit", "rates"];
 var view = "dashboard";
 try { view = sessionStorage.getItem("bepal.view") || "dashboard"; } catch (e) {}
 var user = null, business = null, sales = [], loaded = false, locked = false, pinMode = "unlock", fails = 0, unsubB = null, unsubS = null;
@@ -160,6 +160,9 @@ function show() {
   if (v === "reports") renderReports();
   if (v === "sales") renderSales();
   if (v === "credit") renderCredit();
+    if (v === "rates") renderRates();
+  var rt = $("rateTile"); if (rt) rt.hidden = business.category !== "mill";
+  ["dashPhoto", "ratePhoto", "photoPrev"].forEach(function (id) { var im = $(id); if (im) { im.hidden = !business.photo; if (business.photo) im.src = business.photo; } });
 }
 function go(v) { view = v; query = ""; posQ = ""; $("search").value = ""; $("posSearch").value = ""; closeForm(); show(); if (v === "settings") fillSettings(); }
 
@@ -601,3 +604,35 @@ window.addEventListener("appinstalled", function () {
 if ($("installBox") && /[?&]install=1/.test(location.search) && !isInstalled()) $("installBox").hidden = false;
 on("installBtn", "click", function () { if (!deferredInstall) return; deferredInstall.prompt(); deferredInstall = null; $("installBtn").hidden = true; });
 on("installSkip", "click", function () { $("installBox").hidden = true; });
+// ----- Rate calculator (for mills and service shops) -----
+var UNIT_KG = { kg: 1, kgs: 1, quintal: 100, kuntal: 100, ton: 1000, tonne: 1000 };
+function renderRates() {
+  var kg = parseFloat($("rateKg").value) || 0;
+  $("rateList").innerHTML = business.products.length ? business.products.map(function (p) {
+    var f = UNIT_KG[(p.unit || "").toLowerCase()], qty = f ? kg / f : kg;
+    var cost = kg > 0 ? esc(money(Math.round(qty * p.price * 100) / 100)) : "-";
+    return '<div class="item"><div><div class="name">' + esc(p.name) + '</div><div class="cat">' + esc(money(p.price)) + (p.unit ? " / " + esc(p.unit) : "") +
+      '</div></div><div class="price">' + cost + '</div></div>';
+  }).join("") : '<div class="empty">No services yet. Add them in Products.</div>';
+  $("rateNote").textContent = "Enter the weight in kg for kg, quintal and ton rates (1 quintal = 100 kg). For other units the number is the quantity. This is an estimate.";
+}
+on("rateKg", "input", renderRates);
+function resizePhoto(file, cb) {
+  var r = new FileReader();
+  r.onload = function () {
+    var img = new Image();
+    img.onload = function () {
+      var w = Math.min(800, img.width), h = Math.round(img.height * w / img.width), c = document.createElement("canvas");
+      c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h);
+      cb(c.toDataURL("image/jpeg", 0.7));
+    };
+    img.src = r.result;
+  };
+  r.readAsDataURL(file);
+}
+on("photoFile", "change", function () {
+  var f = this.files[0]; if (!f) return;
+  resizePhoto(f, function (d) { business.photo = d; saveBusiness(); show(); });
+});
+on("photoDel", "click", function () { delete business.photo; saveBusiness(); show(); });
+Object.assign(NE, { "Rate calculator": "दर क्याल्कुलेटर", "Shop photo": "पसलको फोटो", "Remove photo": "फोटो हटाउनुहोस्", "Weight in kg (or quantity)": "केजीमा तौल (वा मात्रा)" });

@@ -66,6 +66,7 @@ gtag('config', '16293242761');
           <option value="grocery">Grocery store</option>
           <option value="retail">Retail shop</option>
           <option value="wholesale">Wholesaler</option>
+          <option value="mill">Mill / service</option>
           <option value="other">Other</option>
         </select>
         <label for="bCurrency">Currency symbol</label><input id="bCurrency" value="Rs" maxlength="6">
@@ -75,6 +76,7 @@ gtag('config', '16293242761');
     </section>
 
     <section id="viewDashboard" hidden>
+      <img id="dashPhoto" alt="" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px" hidden>
       <h2 id="dName"></h2>
       <p class="sub" id="dInfo"></p>
       <div class="tiles">
@@ -84,6 +86,7 @@ gtag('config', '16293242761');
         <button class="tile" type="button" data-go="reports">Reports</button>
                 <button class="tile" type="button" data-go="settings">Settings</button>
                         <button class="tile" type="button" data-go="credit">Credit (Udhar)</button>
+                                <button class="tile" type="button" id="rateTile" data-go="rates" hidden>Rate calculator</button>
       </div>
       <p class="msg" id="dAlert"></p>
               
@@ -163,7 +166,7 @@ gtag('config', '16293242761');
         <label for="sPhone">Phone number</label><input id="sPhone" type="tel" required>
         <label for="sCat">Category</label>
           <option value="mill">Mill / service</option>
-        <select id="sCat"><option value="grocery">Grocery store</option><option value="retail">Retail shop</option><option value="wholesale">Wholesaler</option><option value="other">Other</option></select>
+        <select id="sCat"><option value="grocery">Grocery store</option><option value="retail">Retail shop</option><option value="wholesale">Wholesaler</option><option value="mill">Mill / service</option><option value="other">Other</option></select>
         <label for="sCur">Currency symbol</label><input id="sCur" maxlength="6">
         <button class="btn" type="submit">Save business details</button>
       </form>
@@ -181,6 +184,11 @@ gtag('config', '16293242761');
         <button class="btn alt" type="submit">Change password</button>
       </form>
 
+      <h3>Shop photo</h3>
+      <p class="sub">Shown on the home page and the rate calculator.</p>
+      <img id="photoPrev" alt="" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px" hidden>
+      <input id="photoFile" type="file" accept="image/*">
+      <button class="btn alt danger" type="button" id="photoDel">Remove photo</button>
       <h3>Language</h3>
       <select id="sLang"><option value="en">English</option><option value="ne">नेपाली</option></select>
       <h3>Security</h3>
@@ -225,6 +233,15 @@ gtag('config', '16293242761');
       <button class="btn alt" type="button" id="scanAgain">Scan again</button>
       <button class="btn" type="button" id="scanClose">Close</button>
     </div>
+    <section id="viewRates" hidden>
+      <button class="back" type="button">&larr; Dashboard</button>
+      <img id="ratePhoto" alt="" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px" hidden>
+      <h2>Rate calculator</h2>
+      <label for="rateKg">Weight in kg (or quantity)</label>
+      <input id="rateKg" type="number" min="0" step="any" inputmode="decimal" placeholder="0">
+      <div class="list" id="rateList"></div>
+      <p class="sub" id="rateNote"></p>
+    </section>
   </main>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script type="module" src="script.js"></script>
