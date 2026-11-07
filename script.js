@@ -507,14 +507,14 @@ function dateInfo(d) {
   var n = daysLeft(d), t = new Date(d + "T00:00:00").toLocaleDateString();
   return n < 0 ? t + " (EXPIRED)" : n <= 30 ? t + " (" + n + " days left)" : t;
 }
-var scanner = null, scanMode = "info";
+var scanner = null, scanMode = "info", scanBusy = false;
 function stopCamera() {
   if (!scanner) return;
   var sc = scanner; scanner = null;
   sc.stop().then(function () { sc.clear(); }).catch(function () {});
 }
 function openScan(mode) {
-  scanMode = mode; $("scanBox").hidden = false; $("scanInfo").hidden = true; $("scanMsg").textContent = "";
+  scanMode = mode; scanBusy = false; $("scanBox").hidden = false; $("scanInfo").hidden = true; $("scanMsg").textContent = "";
   if (!window.Html5Qrcode) { $("scanMsg").textContent = "The scanner could not load. Check your internet and reload."; return; }
   stopCamera();
   scanner = new Html5Qrcode("reader");
@@ -523,11 +523,13 @@ function openScan(mode) {
 }
 function closeScan() { stopCamera(); $("scanBox").hidden = true; }
 function onScan(code) {
+  if (scanBusy) return;   // the camera reports the same code many times a second: use it only once
+  scanBusy = true;
   code = String(code).trim();
   var p = business.products.filter(function (x) { return x.barcode === code; })[0];
   if (scanMode === "fill") { $("pBarcode").value = code; closeScan(); return; }
   if (scanMode === "cart") {
-    if (p) { closeScan(); changeQty(p.id, 1); } else $("scanMsg").textContent = "No product has the barcode " + code;
+    if (p) { closeScan(); changeQty(p.id, 1); } else { $("scanMsg").textContent = "No product has the barcode " + code; setTimeout(function () { scanBusy = false; }, 1500); }
     return;
   }
   stopCamera();
