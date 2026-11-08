@@ -160,9 +160,7 @@ function show() {
   if (v === "reports") renderReports();
   if (v === "sales") renderSales();
   if (v === "credit") renderCredit();
-    if (v === "rates") renderRates();
-  var rt = $("rateTile"); if (rt) rt.hidden = business.category !== "mill";
-  ["dashPhoto", "ratePhoto", "photoPrev"].forEach(function (id) { var im = $(id); if (im) { im.hidden = !business.photo; if (business.photo) im.src = business.photo; } });
+  if (v === "rates") renderRates();
 }
 function go(v) { view = v; query = ""; posQ = ""; $("search").value = ""; $("posSearch").value = ""; closeForm(); show(); if (v === "settings") fillSettings(); }
 
@@ -592,47 +590,34 @@ document.querySelectorAll(".back").forEach(function (b) { b.addEventListener("cl
 show();
 if (lang === "ne") { applyLang(document.body); document.documentElement.lang = "ne"; }
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
-// ----- Install screen (shown when the app is opened from the website) -----
+
+// ----- Install screen (shown when the app is opened from the website with ?install=1) -----
 var deferredInstall = null;
 function isInstalled() { return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; }
 window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferredInstall = e; if ($("installBtn")) $("installBtn").hidden = false; });
 window.addEventListener("appinstalled", function () {
-    if (window.gtag) gtag("event", "app_install");
+  if (window.gtag) gtag("event", "app_install");
   if ($("installMsg")) $("installMsg").textContent = "Installed. Open BEPAL from your home screen.";
   if ($("installBtn")) $("installBtn").hidden = true;
 });
 if ($("installBox") && /[?&]install=1/.test(location.search) && !isInstalled()) $("installBox").hidden = false;
 on("installBtn", "click", function () { if (!deferredInstall) return; deferredInstall.prompt(); deferredInstall = null; $("installBtn").hidden = true; });
 on("installSkip", "click", function () { $("installBox").hidden = true; });
-// ----- Rate calculator (for mills and service shops) -----
+
+// ----- Rate calculator: one selected product or service -----
 var UNIT_KG = { kg: 1, kgs: 1, quintal: 100, kuntal: 100, ton: 1000, tonne: 1000 };
 function renderRates() {
-  var kg = parseFloat($("rateKg").value) || 0;
-  $("rateList").innerHTML = business.products.length ? business.products.map(function (p) {
-    var f = UNIT_KG[(p.unit || "").toLowerCase()], qty = f ? kg / f : kg;
-    var cost = kg > 0 ? esc(money(Math.round(qty * p.price * 100) / 100)) : "-";
-    return '<div class="item"><div><div class="name">' + esc(p.name) + '</div><div class="cat">' + esc(money(p.price)) + (p.unit ? " / " + esc(p.unit) : "") +
-      '</div></div><div class="price">' + cost + '</div></div>';
-  }).join("") : '<div class="empty">No services yet. Add them in Products.</div>';
+  var sel = $("ratePick"), keep = sel.value;
+  sel.innerHTML = business.products.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + "</option>"; }).join("");
+  if (keep) sel.value = keep;
+  var p = find(Number(sel.value)), kg = parseFloat($("rateKg").value) || 0;
+  if (!p) { $("rateList").innerHTML = '<div class="empty">No products yet. Add them in Products.</div>'; return; }
+  var f = UNIT_KG[(p.unit || "").toLowerCase()], qty = f ? kg / f : kg;
+  var cost = kg > 0 ? esc(money(Math.round(qty * p.price * 100) / 100)) : "-";
+  $("rateList").innerHTML = '<div class="item"><div><div class="name">' + esc(p.name) + '</div><div class="cat">' + esc(money(p.price)) + (p.unit ? " / " + esc(p.unit) : "") +
+    '</div></div><div class="price">' + cost + '</div></div>';
   $("rateNote").textContent = "Enter the weight in kg for kg, quintal and ton rates (1 quintal = 100 kg). For other units the number is the quantity. This is an estimate.";
 }
+on("ratePick", "change", renderRates);
 on("rateKg", "input", renderRates);
-function resizePhoto(file, cb) {
-  var r = new FileReader();
-  r.onload = function () {
-    var img = new Image();
-    img.onload = function () {
-      var w = Math.min(800, img.width), h = Math.round(img.height * w / img.width), c = document.createElement("canvas");
-      c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h);
-      cb(c.toDataURL("image/jpeg", 0.7));
-    };
-    img.src = r.result;
-  };
-  r.readAsDataURL(file);
-}
-on("photoFile", "change", function () {
-  var f = this.files[0]; if (!f) return;
-  resizePhoto(f, function (d) { business.photo = d; saveBusiness(); show(); });
-});
-on("photoDel", "click", function () { delete business.photo; saveBusiness(); show(); });
-Object.assign(NE, { "Rate calculator": "दर क्याल्कुलेटर", "Shop photo": "पसलको फोटो", "Remove photo": "फोटो हटाउनुहोस्", "Weight in kg (or quantity)": "केजीमा तौल (वा मात्रा)" });
+Object.assign(NE, { "Rate calculator": "दर क्याल्कुलेटर", "Choose product or service": "सामान वा सेवा छान्नुहोस्", "Weight in kg (or quantity)": "केजीमा तौल (वा मात्रा)" });

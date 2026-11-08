@@ -86,6 +86,7 @@ gtag('config', '16293242761');
         <button class="tile" type="button" data-go="reports">Reports</button>
                 <button class="tile" type="button" data-go="settings">Settings</button>
                         <button class="tile" type="button" data-go="credit">Credit (Udhar)</button>
+                                <button class="tile" type="button" data-go="rates">Rate calculator</button>
                                 <button class="tile" type="button" id="rateTile" data-go="rates" hidden>Rate calculator</button>
       </div>
       <p class="msg" id="dAlert"></p>
@@ -165,7 +166,7 @@ gtag('config', '16293242761');
         <label for="sOwner">Owner name</label><input id="sOwner" required>
         <label for="sPhone">Phone number</label><input id="sPhone" type="tel" required>
         <label for="sCat">Category</label>
-          <option value="mill">Mill / service</option>
+
         <select id="sCat"><option value="grocery">Grocery store</option><option value="retail">Retail shop</option><option value="wholesale">Wholesaler</option><option value="mill">Mill / service</option><option value="other">Other</option></select>
         <label for="sCur">Currency symbol</label><input id="sCur" maxlength="6">
         <button class="btn" type="submit">Save business details</button>
@@ -237,6 +238,18 @@ gtag('config', '16293242761');
       <button class="back" type="button">&larr; Dashboard</button>
       <img id="ratePhoto" alt="" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px" hidden>
       <h2>Rate calculator</h2>
+      <label for="ratePick">Choose product or service</label>
+      <select id="ratePick"></select>
+      <label for="rateKg">Weight in kg (or quantity)</label>
+      <input id="rateKg" type="number" min="0" step="any" inputmode="decimal" placeholder="0">
+      <div class="list" id="rateList"></div>
+      <p class="sub" id="rateNote"></p>
+    </section>
+    <section id="viewRates" hidden>
+      <button class="back" type="button">&larr; Dashboard</button>
+      <h2>Rate calculator</h2>
+      <label for="ratePick">Choose product or service</label>
+      <select id="ratePick"></select>
       <label for="rateKg">Weight in kg (or quantity)</label>
       <input id="rateKg" type="number" min="0" step="any" inputmode="decimal" placeholder="0">
       <div class="list" id="rateList"></div>
